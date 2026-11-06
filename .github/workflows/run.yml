@@ -2,7 +2,7 @@ name: Build rules dat files
 on:
   workflow_dispatch:
   schedule:
-    - cron: "30 22 * * *" # 6:30 AM UTC+8
+    - cron: "30 23 * * *" # 6:30 AM UTC+8
   push:
     branches:
       - master
@@ -198,43 +198,38 @@ jobs:
           curl -sSL https://github.com/blackmatrix7/ios_rule_script/raw/master/rule/Clash/YouTube/YouTube.yaml | ${{ env.SED }} > ./data-lite/youtube
           curl -sSL https://github.com/blackmatrix7/ios_rule_script/raw/master/rule/Clash/GlobalMedia/GlobalMedia.yaml | ${{ env.SED }} > ./data-lite/proxymedia
 
-          # --- 递归复制指定分类及其所有依赖项到 data-lite ---
-          # 1. 定义你需要的“根”分类（用户指定的11个）
+          # --- 递归复制指定分类及其所有依赖项到 data-lite（数组版） ---
           roots="binance category-ads-all category-ai-!cn category-cryptocurrency \
                  category-entertainment category-media docker geolocation-!cn \
                  okx paypal steam"
 
-          # 2. 使用一个工作队列来处理依赖
-          queue="$roots"
-          # 用一个文件来记录已经处理过的列表，避免循环依赖或重复处理
-          processed_file=$(mktemp)
-          touch "$processed_file"
+          # 初始化队列（数组）和已处理集合
+          queue=()
+          read -ra queue <<< "$roots"
+          declare -A processed=()
 
-          while [ -n "$queue" ]; do
-            current_list=$(echo "$queue" | awk '{print $1}')
-            # 如果已经处理过，则跳过
-            if grep -qxF "$current_list" "$processed_file"; then
-              queue=$(echo "$queue" | sed '1s/^[^ ]* *//')
+          while [ ${#queue[@]} -gt 0 ]; do
+            # 取队首
+            current_list="${queue[0]}"
+            queue=("${queue[@]:1}")
+
+            # 已处理过则跳过（防循环依赖）
+            if [ -n "${processed[$current_list]}" ]; then
               continue
             fi
+            processed["$current_list"]=1
 
-            # 记录为已处理
-            echo "$current_list" >> "$processed_file"
-
-            # 如果该列表在源 data 目录中存在，则复制它
             if [ -f "data/$current_list" ]; then
               cp "data/$current_list" "data-lite/$current_list"
-              # 从该文件中提取所有 include: 的依赖，并加入到队列中
-              deps=$(grep '^include:' "data/$current_list" | sed 's/^include://')
-              if [ -n "$deps" ]; then
-                queue="$queue $deps"
-              fi
+              # 解析该文件里所有 include: 行，按空格拆成多个依赖入队
+              while IFS= read -r line; do
+                for dep in $line; do
+                  [ -n "$dep" ] && queue+=("$dep")
+                done
+              done < <(grep '^include:' "data/$current_list" | sed 's/^include:[[:space:]]*//')
             else
               echo "警告: 在 data 目录中找不到列表 '$current_list'，无法复制。"
             fi
-
-            # 从队列中移除已处理的项
-            queue=$(echo "$queue" | sed '1s/^[^ ]* *//')
           done
           # --- 递归复制结束 ---
 
