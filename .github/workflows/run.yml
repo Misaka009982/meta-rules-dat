@@ -198,6 +198,14 @@ jobs:
           curl -sSL https://github.com/blackmatrix7/ios_rule_script/raw/master/rule/Clash/YouTube/YouTube.yaml | ${{ env.SED }} > ./data-lite/youtube
           curl -sSL https://github.com/blackmatrix7/ios_rule_script/raw/master/rule/Clash/GlobalMedia/GlobalMedia.yaml | ${{ env.SED }} > ./data-lite/proxymedia
 
+          for category in binance category-ads-all category-ai-!cn category-cryptocurrency \
+                    category-entertainment category-media docker geolocation-!cn \
+                    okx paypal steam; do
+            if [ -f "data/$category" ]; then
+              cp "data/$category" "data-lite/$category"
+            fi
+          done
+
           echo include:google >> ./data-lite/proxy && echo include:github >> ./data-lite/proxy && echo include:netflix >> ./data-lite/proxy
           echo ipleak.net >> ./data-lite/proxy && echo browserleaks.org >> ./data-lite/proxy
           echo "full:o33249.ingest.sentry.io" >>  ./data-lite/openai
